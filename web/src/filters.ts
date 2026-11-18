@@ -1,43 +1,43 @@
-import { Priority, Task, today } from "./api";
+import { Bot, CalendarClock, CircleExclamationPoint, Flag, Flame, LucideIcon, User, UserX } from "lucide-react";
+import { Task, today } from "./api";
 
-export type DueFilter = "" | "overdue" | "today" | "week" | "none";
+export type Chip = "mine" | "agents" | "unassigned" | "blocked" | "overdue" | "soon" | "urgent";
 
 export interface Filters {
   search: string;
   projectId?: number;
-  priority: Priority | "";
-  assignee: string; // "" anyone, "none", "user", or keyOf(agent)
-  tag: string;
-  due: DueFilter;
+  chip?: Chip;
 }
 
-export const EMPTY_FILTERS: Filters = { search: "", priority: "", assignee: "", tag: "", due: "" };
+export const EMPTY_FILTERS: Filters = { search: "" };
 
 export const isOpen = (t: Task) => t.status !== "done" && t.status !== "cancelled";
 export const isOverdue = (t: Task) => isOpen(t) && !!t.due_date && t.due_date < today();
 
-function inDays(n: number): string {
+export function inDays(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function matches(t: Task, f: Filters, keyOf: (a: Task["assignee"]) => string): boolean {
-  if (f.projectId && t.project_id !== f.projectId) return false;
-  if (f.priority && t.priority !== f.priority) return false;
-  if (f.assignee === "none" ? t.assignee !== null : f.assignee && keyOf(t.assignee) !== f.assignee) return false;
-  if (f.tag && !t.tags.some((g) => g.toLowerCase() === f.tag.toLowerCase())) return false;
-  if (f.due) {
-    const d = t.due_date;
-    if (f.due === "none" ? d !== null : !d) return false;
-    if (d && f.due === "overdue" && !isOverdue(t)) return false;
-    if (d && f.due === "today" && d !== today()) return false;
-    if (d && f.due === "week" && (d < today() || d > inDays(7))) return false;
-  }
-  const q = f.search.trim().toLowerCase();
-  if (q && ![t.title, t.description, t.project, ...t.tags].some((x) => x.toLowerCase().includes(q))) return false;
-  return true;
+// Quick filters shown as chips with live counts; one can be on at a time.
+export const CHIPS: { id: Chip; label: string; icon: LucideIcon; test: (t: Task) => boolean }[] = [
+  { id: "mine", label: "Mine", icon: User, test: (t) => t.assignee?.kind === "user" },
+  { id: "agents", label: "Agent work", icon: Bot, test: (t) => t.assignee?.kind === "agent" },
+  { id: "unassigned", label: "Unassigned", icon: UserX, test: (t) => isOpen(t) && t.assignee === null },
+  { id: "blocked", label: "Blocked", icon: CircleExclamationPoint, test: (t) => t.status === "blocked" },
+  { id: "overdue", label: "Overdue", icon: Flag, test: isOverdue },
+  { id: "soon", label: "Due soon", icon: CalendarClock, test: (t) => isOpen(t) && !!t.due_date && t.due_date >= today() && t.due_date <= inDays(7) },
+  { id: "urgent", label: "Urgent–High", icon: Flame, test: (t) => isOpen(t) && (t.priority === "urgent" || t.priority === "high") },
+];
+
+export function matchesSearch(t: Task, search: string): boolean {
+  const q = search.trim().toLowerCase();
+  return !q || [t.title, t.description, t.project, `#${t.id}`, ...t.tags].some((x) => x.toLowerCase().includes(q));
 }
 
-// Filters that narrow tasks beyond the project; the activity view only honours search and project.
-export const hasTaskFilters = (f: Filters) => !!(f.priority || f.assignee || f.tag || f.due);
+export function matches(t: Task, f: Filters): boolean {
+  if (f.projectId && t.project_id !== f.projectId) return false;
+  if (f.chip && !CHIPS.find((c) => c.id === f.chip)!.test(t)) return false;
+  return matchesSearch(t, f.search);
+}

@@ -1,6 +1,25 @@
-import { Bot, ChevronDown, User, X } from "lucide-react";
+import {
+  Bot, ChevronDown, Circle, CircleCheck, CircleDashed, CircleDot, CircleExclamationPoint, CircleX, LucideIcon, User, X,
+} from "lucide-react";
 import { ButtonHTMLAttributes, FormEvent, ReactNode, SelectHTMLAttributes, useEffect, useState } from "react";
-import { Actor } from "./api";
+import { Actor, Status } from "./api";
+
+// Status colour is kept to a small dot or icon; nothing else is tinted.
+const STATUS_ICON: Record<Status, LucideIcon> = {
+  backlog: CircleDashed,
+  todo: Circle,
+  in_progress: CircleDot,
+  blocked: CircleExclamationPoint,
+  done: CircleCheck,
+  cancelled: CircleX,
+};
+
+export const StatusDot = ({ status }: { status: Status }) => <span className={`dot s-${status}`} aria-hidden />;
+
+export function StatusIcon({ status, size = 15 }: { status: Status; size?: number }) {
+  const Icon = STATUS_ICON[status];
+  return <Icon size={size} strokeWidth={2.25} className={`status-icon s-${status}`} aria-hidden />;
+}
 
 // A small in-app dialog: used instead of the browser's prompt() and confirm().
 export function Dialog({ title, onClose, onSubmit, children, actions }: {

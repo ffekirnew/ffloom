@@ -1,25 +1,35 @@
-import { Activity as ActivityIcon, FolderPlus, LayoutGrid, List, Monitor, Moon, Plus, RefreshCw, Search, Spool, Sun, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Contrast, FolderPlus, Keyboard, Moon, Plus, Search, Spool, Sun, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity } from "./Activity";
-import { Actor, Project, STATUSES, Status, Task, api } from "./api";
+import { Actor, Project, STATUSES, Status, Task, api, relTime } from "./api";
 import { Board } from "./Board";
-import { FilterMenu } from "./FilterMenu";
-import { EMPTY_FILTERS, Filters, hasTaskFilters, isOpen, isOverdue, matches } from "./filters";
+import { CHIPS, Chip, EMPTY_FILTERS, Filters, isOverdue, matches } from "./filters";
+import { ProjectDialog } from "./ProjectDialog";
 import { Projects } from "./Projects";
 import { TaskModal, keyOf } from "./TaskModal";
-import { ProjectDialog } from "./ProjectDialog";
-import { ConfirmDialog, IconButton, Select } from "./ui";
+import { ConfirmDialog, Dialog, IconButton, Select, StatusDot } from "./ui";
 
 type View = "board" | "projects" | "activity";
 type Theme = "system" | "light" | "dark";
-const NEXT_THEME: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
-const THEME_ICON = { system: Monitor, light: Sun, dark: Moon };
-const THEME_LABEL = { system: "System theme", light: "Light theme", dark: "Dark theme" };
 
-const VIEWS: { id: View; label: string; icon: typeof LayoutGrid }[] = [
-  { id: "board", label: "Board", icon: LayoutGrid },
-  { id: "projects", label: "Projects", icon: List },
-  { id: "activity", label: "Activity", icon: ActivityIcon },
+const VIEWS: { id: View; label: string }[] = [
+  { id: "board", label: "Board" },
+  { id: "projects", label: "Projects" },
+  { id: "activity", label: "Activity" },
+];
+
+const THEMES: { id: Theme; label: string; icon: typeof Sun }[] = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "system", label: "Match system", icon: Contrast },
+  { id: "dark", label: "Dark", icon: Moon },
+];
+
+const SHORTCUTS: [string, string][] = [
+  ["/", "Search"],
+  ["n", "New task"],
+  ["1 · 2 · 3", "Board · Projects · Activity"],
+  ["?", "Show shortcuts"],
+  ["Esc", "Close a dialog or clear search"],
 ];
 
 // Kanban on desktop, the activity feed on narrow screens; every view is reachable from the tabs.
@@ -42,6 +52,9 @@ function save(key: string, value: unknown) {
 
 const defaultCollapsed = (ts: Task[]) => new Set(STATUSES.filter((s) => s === "done" || !ts.some((t) => t.status === s)));
 
+const typing = (el: EventTarget | null) =>
+  el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+
 export function App() {
   const [view, setView] = useState<View>(defaultView);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -51,7 +64,6 @@ export function App() {
   // a task id, or what a new task starts with
   const [open, setOpen] = useState<number | { status: Status; projectId?: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(() => load("ffloom.theme", "system"));
   // Columns start collapsed when they're Done or empty, worked out again whenever the project changes.
@@ -59,6 +71,8 @@ export function App() {
   // { project } edits one, {} creates one
   const [projectDialog, setProjectDialog] = useState<{ project?: Project } | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -68,7 +82,6 @@ export function App() {
     Promise.all([api.projects(), api.tasks()]).then(([ps, ts]) => {
       setProjects(ps);
       setTasks(ts);
-      setSyncedAt(new Date());
       if (filters.projectId && !ps.some((p) => p.id === filters.projectId)) setFilter("projectId", undefined);
     }).catch(onError);
   }, [refreshKey]);
@@ -95,16 +108,31 @@ export function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
+  const dialogOpen = open !== null || projectDialog !== null || deleting !== null || showShortcuts;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "Escape" && e.target === searchRef.current) { setFilter("search", ""); searchRef.current?.blur(); return; }
+      if (dialogOpen || typing(e.target)) return;
+      if (e.key === "/") { e.preventDefault(); searchRef.current?.focus(); }
+      else if (e.key === "n" && projects.length) { e.preventDefault(); setOpen({ status: "todo" }); }
+      else if (e.key === "?") setShowShortcuts(true);
+      else if (["1", "2", "3"].includes(e.key)) setView(VIEWS[Number(e.key) - 1].id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [dialogOpen, projects.length]);
+
   const all = tasks ?? [];
-  const shown = useMemo(() => all.filter((t) => matches(t, filters, keyOf)), [all, filters]);
   const inProject = useMemo(() => all.filter((t) => !filters.projectId || t.project_id === filters.projectId), [all, filters.projectId]);
+  const shown = useMemo(() => all.filter((t) => matches(t, filters)), [all, filters]);
+  const lastChange = useMemo(() => all.reduce<string | null>((m, t) => (!m || t.updated_at > m ? t.updated_at : m), null), [all]);
 
   const knownAgents = useMemo(() => {
     const seen = new Map<string, Actor>();
     for (const t of all) if (t.assignee?.kind === "agent") seen.set(keyOf(t.assignee), t.assignee);
     return [...seen.values()];
   }, [all]);
-  const allTags = useMemo(() => [...new Set(all.flatMap((t) => t.tags))].sort((a, b) => a.localeCompare(b)), [all]);
 
   const toggleColumn = (s: Status) => {
     const next = new Set(collapsed);
@@ -114,12 +142,11 @@ export function App() {
   };
 
   const move = (task: Task, status: Status) => {
-    setTasks(all.map((t) => (t.id === task.id ? { ...t, status } : t)));
+    setTasks(all.map((t) => (t.id === task.id ? { ...t, status, updated_at: new Date().toISOString() } : t)));
     api.updateTask(task.id, { status }).then(refresh).catch((e) => { onError(e); refresh(); });
   };
 
   const newProject = () => setProjectDialog({});
-  const editProject = (p: Project) => setProjectDialog({ project: p });
   const deleteProject = (p: Project) =>
     api.deleteProject(p.id).then(() => {
       if (filters.projectId === p.id) setFilter("projectId", undefined);
@@ -127,54 +154,104 @@ export function App() {
     }).catch(onError);
   const deletingCount = deleting ? all.filter((t) => t.project_id === deleting.id).length : 0;
 
-  const current = projects.find((p) => p.id === filters.projectId);
-  const taskFiltersApply = view !== "activity";
-  const anyFilter = !!filters.search || !!filters.projectId || (taskFiltersApply && hasTaskFilters(filters));
-  const ThemeIcon = THEME_ICON[theme];
-
-  const stats = {
-    open: inProject.filter(isOpen).length,
-    blocked: inProject.filter((t) => t.status === "blocked").length,
-    overdue: inProject.filter(isOverdue).length,
-  };
+  const chipsApply = view !== "activity";
+  const anyFilter = !!filters.search || !!filters.projectId || (chipsApply && !!filters.chip);
+  const count = (s: Status) => inProject.filter((t) => t.status === s).length;
+  const overdue = inProject.filter(isOverdue).length;
 
   return (
     <div className={`app view-${view}`}>
-      <header className="top glass">
-        <div className="brand"><Spool size={20} strokeWidth={2.25} /><h1>ffloom</h1></div>
-        <nav className="segmented" role="tablist" aria-label="Views">
-          {VIEWS.map(({ id, label, icon: Icon }) => (
-            <button key={id} role="tab" aria-selected={view === id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
-              <Icon size={15} /><span>{label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="spacer" />
-        <IconButton label={`${THEME_LABEL[theme]} (click to change)`} onClick={() => setTheme(NEXT_THEME[theme])}>
-          <ThemeIcon size={17} />
-        </IconButton>
-        <button className="btn primary" onClick={() => setOpen({ status: "todo" })} disabled={projects.length === 0}
-          title={projects.length === 0 ? "Create a project first" : undefined}>
-          <Plus size={16} strokeWidth={2.5} /><span>New task</span>
-        </button>
-      </header>
+      <div className="frame">
+        <header className="top">
+          <div className="brand">
+            <span className="logo"><Spool size={15} strokeWidth={2.5} /></span>
+            <h1>ffloom</h1>
+          </div>
+          <nav className="tabs" role="tablist" aria-label="Views">
+            {VIEWS.map(({ id, label }) => (
+              <button key={id} role="tab" aria-selected={view === id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="spacer" />
+          <button className="btn primary" onClick={() => setOpen({ status: "todo" })} disabled={projects.length === 0}
+            title={projects.length === 0 ? "Create a project first" : "New task (n)"}>
+            <Plus size={15} strokeWidth={2.5} /><span>New task</span>
+          </button>
+          <div className="theme-switch" role="radiogroup" aria-label="Theme">
+            {THEMES.map(({ id, label, icon: Icon }) => (
+              <button key={id} role="radio" aria-checked={theme === id} title={label} aria-label={label}
+                className={theme === id ? "active" : ""} onClick={() => setTheme(id)}>
+                <Icon size={14} strokeWidth={2.25} />
+              </button>
+            ))}
+          </div>
+        </header>
 
-      {projects.length > 0 && (
-        <div className="filters">
-          <label className="search">
-            <Search size={16} aria-hidden />
-            <input type="search" placeholder="Search" value={filters.search} aria-label="Search"
-              onChange={(e) => setFilter("search", e.target.value)} />
-          </label>
-          <Select value={filters.projectId ?? ""} aria-label="Project" className={filters.projectId ? "set" : ""}
-            onChange={(e) => setFilter("projectId", e.target.value ? Number(e.target.value) : undefined)}>
-            <option value="">All projects</option>
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
-          {taskFiltersApply && <FilterMenu filters={filters} agents={knownAgents} tags={allTags} onChange={setFilter} />}
-          {anyFilter && <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)}><X size={14} />Clear</button>}
-        </div>
-      )}
+        {projects.length > 0 && (
+          <div className="filters">
+            <label className="search">
+              <Search size={15} aria-hidden />
+              <input ref={searchRef} type="search" placeholder={view === "activity" ? "Search activity" : "Search cards"}
+                value={filters.search} aria-label="Search" onChange={(e) => setFilter("search", e.target.value)} />
+              <kbd>/</kbd>
+            </label>
+            <Select value={filters.projectId ?? ""} aria-label="Project" className={filters.projectId ? "set" : ""}
+              onChange={(e) => setFilter("projectId", e.target.value ? Number(e.target.value) : undefined)}>
+              <option value="">All projects</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </Select>
+            {chipsApply && CHIPS.map(({ id, label, icon: Icon, test }) => {
+              const on = filters.chip === id;
+              return (
+                <button key={id} type="button" className={`quick ${on ? "on" : ""}`} aria-pressed={on}
+                  onClick={() => setFilter("chip", on ? undefined : (id as Chip))}>
+                  <Icon size={14} strokeWidth={2.25} />{label}<span className="n">{inProject.filter(test).length}</span>
+                </button>
+              );
+            })}
+            {anyFilter && <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)}><X size={14} />Clear</button>}
+          </div>
+        )}
+
+        <main>
+          {tasks === null ? null : projects.length === 0 ? (
+            <div className="empty">
+              <FolderPlus size={32} strokeWidth={1.5} />
+              <p>No projects yet.</p>
+              <button className="btn primary" onClick={newProject}><Plus size={16} strokeWidth={2.5} />New project</button>
+            </div>
+          ) : view === "board" ? (
+            <Board
+              tasks={shown} showProject={!filters.projectId} collapsed={collapsed ?? new Set()}
+              onToggle={toggleColumn} onOpen={setOpen} onMove={move} onAdd={(status) => setOpen({ status })}
+            />
+          ) : view === "projects" ? (
+            <Projects
+              projects={projects} tasks={shown} filtered={!!filters.search || !!filters.chip} projectId={filters.projectId}
+              onOpenTask={setOpen} onAdd={(p) => setOpen({ status: "todo", projectId: p.id })}
+              onNew={newProject} onEdit={(p) => setProjectDialog({ project: p })} onDelete={setDeleting}
+            />
+          ) : (
+            <Activity projectId={filters.projectId} search={filters.search} refreshKey={refreshKey} onOpen={setOpen} onError={onError} />
+          )}
+        </main>
+
+        <footer className="bottom">
+          <span className="footer-stats">
+            <span><StatusDot status="todo" /><strong>{count("todo")}</strong> to do</span>
+            <span><StatusDot status="in_progress" /><strong>{count("in_progress")}</strong> in progress</span>
+            <span><StatusDot status="blocked" /><strong>{count("blocked")}</strong> blocked</span>
+            {overdue > 0 && <span className="bad"><strong>{overdue}</strong> overdue</span>}
+          </span>
+          <span className="spacer" />
+          {lastChange && <span className="last-change"><span className="live" />Last change {relTime(lastChange)}</span>}
+          <button type="button" className="btn ghost small" onClick={() => setShowShortcuts(true)}>
+            <Keyboard size={14} /><span>Shortcuts</span><kbd>?</kbd>
+          </button>
+        </footer>
+      </div>
 
       {error && (
         <div className="toast" role="alert">
@@ -183,43 +260,14 @@ export function App() {
         </div>
       )}
 
-      <main>
-        {tasks === null ? null : projects.length === 0 ? (
-          <div className="empty">
-            <FolderPlus size={32} strokeWidth={1.5} />
-            <p>No projects yet.</p>
-            <button className="btn primary" onClick={newProject}><Plus size={16} strokeWidth={2.5} />New project</button>
-          </div>
-        ) : view === "board" ? (
-          <Board
-            tasks={shown} showProject={!filters.projectId} collapsed={collapsed ?? new Set()}
-            onToggle={toggleColumn} onOpen={setOpen} onMove={move} onAdd={(status) => setOpen({ status })}
-          />
-        ) : view === "projects" ? (
-          <Projects
-            projects={projects} tasks={shown} filtered={!!filters.search || hasTaskFilters(filters)} projectId={filters.projectId}
-            onOpenTask={setOpen} onAdd={(p) => setOpen({ status: "todo", projectId: p.id })}
-            onNew={newProject} onEdit={editProject} onDelete={setDeleting}
-          />
-        ) : (
-          <Activity projectId={filters.projectId} search={filters.search} refreshKey={refreshKey} onOpen={setOpen} onError={onError} />
-        )}
-      </main>
-
-      <footer className="bottom">
-        <span className="footer-brand"><Spool size={13} strokeWidth={2.25} />ffloom</span>
-        <span className="footer-stats">
-          {current ? `${current.name}: ` : ""}{stats.open} open
-          {stats.blocked > 0 && <> · <span className="bad">{stats.blocked} blocked</span></>}
-          {stats.overdue > 0 && <> · <span className="bad">{stats.overdue} overdue</span></>}
-          {taskFiltersApply && shown.length !== inProject.length && <> · showing {shown.length} of {inProject.length}</>}
-        </span>
-        <span className="footer-sync">
-          {syncedAt && <>Synced {syncedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</>}
-          <IconButton label="Refresh" onClick={refresh}><RefreshCw size={14} /></IconButton>
-        </span>
-      </footer>
-
+      {showShortcuts && (
+        <Dialog title="Keyboard shortcuts" onClose={() => setShowShortcuts(false)} onSubmit={() => setShowShortcuts(false)}
+          actions={<button type="submit" className="btn">Close</button>}>
+          <dl className="shortcuts">
+            {SHORTCUTS.map(([k, what]) => <div key={k}><dt><kbd>{k}</kbd></dt><dd>{what}</dd></div>)}
+          </dl>
+        </Dialog>
+      )}
       {projectDialog && (
         <ProjectDialog
           project={projectDialog.project}

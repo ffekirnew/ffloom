@@ -1,9 +1,9 @@
-import { Calendar, ChevronDown, Flag, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Project, STATUS_LABELS, Status, Task, who } from "./api";
-import { dueLabel } from "./Board";
-import { isOpen, isOverdue } from "./filters";
-import { Avatar, IconButton } from "./ui";
+import { DueChip, PriorityBadge } from "./Board";
+import { isOpen } from "./filters";
+import { Avatar, IconButton, StatusDot } from "./ui";
 
 // Work in progress first, finished work last.
 const ORDER: Status[] = ["in_progress", "blocked", "todo", "backlog", "done", "cancelled"];
@@ -21,23 +21,17 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
   return (
     <li className={`task-row ${closed ? "closed" : ""}`} onClick={onOpen} tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
-      <span className={`status-pill ${task.status}`}>{STATUS_LABELS[task.status]}</span>
+      <span className="status-pill"><StatusDot status={task.status} />{STATUS_LABELS[task.status]}</span>
       <span className="row-main">
-        <span className="row-title">{task.title}</span>
+        <span className="row-title"><PriorityBadge task={task} />{task.title}</span>
         {task.status === "blocked" && task.latest_comment && <span className="blocked-reason">{task.latest_comment.body}</span>}
       </span>
       <span className="row-meta">
-        {task.tags.map((g) => <span key={g} className="chip">#{g}</span>)}
-        {(task.priority === "high" || task.priority === "urgent") && (
-          <span className={`flag ${task.priority}`} title={`${task.priority} priority`}>
-            <Flag size={12} strokeWidth={2.5} fill="currentColor" />
-          </span>
-        )}
-        {task.due_date && (
-          <span className={`due ${isOverdue(task) ? "overdue" : ""}`}><Calendar size={12} strokeWidth={2.5} />{dueLabel(task.due_date)}</span>
-        )}
+        <span className="chip mono">#{task.id}</span>
+        <DueChip task={task} />
+        {task.tags.map((g) => <span key={g} className="chip mono">{g}</span>)}
         <span className="row-assignee" title={task.assignee ? who(task.assignee) : "Unassigned"}>
-          {task.assignee && <Avatar actor={task.assignee} />}
+          {task.assignee && <Avatar actor={task.assignee} size={20} />}
         </span>
       </span>
     </li>
