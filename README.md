@@ -5,7 +5,7 @@ A task board for one person and their AI agents. Agents use the `ffloom` CLI to 
 - **Server:** FastAPI + SQLite (`src/ffloom/server.py`), serving the JSON API under `/api` and the UI at `/`.
 - **UI:** React + Vite (`web/`). Kanban board with collapsible columns, plus an activity feed.
 - **CLI:** `src/ffloom/cli.py`. Standard library only, so it installs with no dependencies.
-- **Agent skill:** `skill/ffloom/SKILL.md`. It teaches agents the CLI and the no-delete rule.
+- **Agent skills:** `skill/ffloom/SKILL.md` teaches agents the CLI and the no-delete rule. `skill/ffloom-plan/SKILL.md` turns a one-line goal into a SMART project: it interviews you one question at a time, then creates the project, milestones and first tasks once you approve.
 
 The server trusts whatever reaches it: it has no login and doesn't verify the agent name. Put it behind something that authenticates people (e.g. Cloudflare Access), and run the CLI only where the API isn't exposed to anyone else. See [self-host RFC-0010](https://github.com/ffekirnew/self-host/blob/master/docs/rfcs/0010-task-manager.md) for the design.
 
@@ -24,6 +24,7 @@ The CLI has no delete command: deleting is done in the UI only.
 
 ```bash
 ln -s ~/code/ffloom/skill/ffloom ~/.claude/skills/ffloom
+ln -s ~/code/ffloom/skill/ffloom-plan ~/.claude/skills/ffloom-plan
 ```
 
 ## Run it
