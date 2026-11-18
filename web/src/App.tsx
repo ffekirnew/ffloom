@@ -7,7 +7,8 @@ import { FilterMenu } from "./FilterMenu";
 import { EMPTY_FILTERS, Filters, hasTaskFilters, isOpen, isOverdue, matches } from "./filters";
 import { Projects } from "./Projects";
 import { TaskModal, keyOf } from "./TaskModal";
-import { IconButton, Select } from "./ui";
+import { ProjectDialog } from "./ProjectDialog";
+import { ConfirmDialog, IconButton, Select } from "./ui";
 
 type View = "board" | "projects" | "activity";
 type Theme = "system" | "light" | "dark";
@@ -55,6 +56,9 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(() => load("ffloom.theme", "system"));
   // Columns start collapsed when they're Done or empty, worked out again whenever the project changes.
   const [collapsed, setCollapsed] = useState<Set<Status> | null>(null);
+  // { project } edits one, {} creates one
+  const [projectDialog, setProjectDialog] = useState<{ project?: Project } | null>(null);
+  const [deleting, setDeleting] = useState<Project | null>(null);
 
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -114,27 +118,14 @@ export function App() {
     api.updateTask(task.id, { status }).then(refresh).catch((e) => { onError(e); refresh(); });
   };
 
-  const newProject = () => {
-    const name = prompt("New project name");
-    if (name?.trim()) api.createProject(name.trim()).then((p) => { setFilter("projectId", p.id); refresh(); }).catch(onError);
-  };
-  const renameProject = (p: Project) => {
-    const name = prompt("Rename project", p.name);
-    if (name?.trim()) api.updateProject(p.id, { name: name.trim() }).then(refresh).catch(onError);
-  };
-  const describeProject = (p: Project) => {
-    const description = prompt(`Description for ${p.name}`, p.description);
-    if (description !== null) api.updateProject(p.id, { description: description.trim() }).then(refresh).catch(onError);
-  };
-  const deleteProject = (p: Project) => {
-    const n = all.filter((t) => t.project_id === p.id).length;
-    if (confirm(`Delete project "${p.name}"${n ? ` and its ${n} tasks` : ""}? This can't be undone.`)) {
-      api.deleteProject(p.id).then(() => {
-        if (filters.projectId === p.id) setFilter("projectId", undefined);
-        refresh();
-      }).catch(onError);
-    }
-  };
+  const newProject = () => setProjectDialog({});
+  const editProject = (p: Project) => setProjectDialog({ project: p });
+  const deleteProject = (p: Project) =>
+    api.deleteProject(p.id).then(() => {
+      if (filters.projectId === p.id) setFilter("projectId", undefined);
+      refresh();
+    }).catch(onError);
+  const deletingCount = deleting ? all.filter((t) => t.project_id === deleting.id).length : 0;
 
   const current = projects.find((p) => p.id === filters.projectId);
   const taskFiltersApply = view !== "activity";
@@ -208,7 +199,7 @@ export function App() {
           <Projects
             projects={projects} tasks={shown} filtered={!!filters.search || hasTaskFilters(filters)} projectId={filters.projectId}
             onOpenTask={setOpen} onAdd={(p) => setOpen({ status: "todo", projectId: p.id })}
-            onNew={newProject} onRename={renameProject} onDescribe={describeProject} onDelete={deleteProject}
+            onNew={newProject} onEdit={editProject} onDelete={setDeleting}
           />
         ) : (
           <Activity projectId={filters.projectId} search={filters.search} refreshKey={refreshKey} onOpen={setOpen} onError={onError} />
@@ -229,6 +220,24 @@ export function App() {
         </span>
       </footer>
 
+      {projectDialog && (
+        <ProjectDialog
+          project={projectDialog.project}
+          onClose={() => setProjectDialog(null)}
+          onSaved={(p) => { if (!projectDialog.project) setFilter("projectId", p.id); refresh(); }}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title={`Delete ${deleting.name}?`}
+          message={deletingCount
+            ? <>This deletes the project and its <strong>{deletingCount} {deletingCount === 1 ? "task" : "tasks"}</strong>, with their comments. It can't be undone.</>
+            : "This can't be undone."}
+          confirmLabel="Delete project"
+          onConfirm={() => deleteProject(deleting)}
+          onClose={() => setDeleting(null)}
+        />
+      )}
       {open !== null && (
         <TaskModal
           key={typeof open === "number" ? open : `new-${open.status}-${open.projectId ?? ""}`}

@@ -1,4 +1,4 @@
-import { Calendar, ChevronDown, Flag, FolderPlus, Pencil, Plus, TextAlignStart, Trash2 } from "lucide-react";
+import { Calendar, ChevronDown, Flag, FolderPlus, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Project, STATUS_LABELS, Status, Task, who } from "./api";
 import { dueLabel } from "./Board";
@@ -44,14 +44,13 @@ function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
   );
 }
 
-function Group({ project, tasks, filtered, onOpenTask, onAdd, onRename, onDescribe, onDelete }: {
+function Group({ project, tasks, filtered, onOpenTask, onAdd, onEdit, onDelete }: {
   project: Project;
   tasks: Task[];
   filtered: boolean;
   onOpenTask: (id: number) => void;
   onAdd: () => void;
-  onRename: () => void;
-  onDescribe: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [folded, setFolded] = useState(false);
@@ -71,8 +70,7 @@ function Group({ project, tasks, filtered, onOpenTask, onAdd, onRename, onDescri
           {open} open{blocked > 0 && <> · <span className="bad">{blocked} blocked</span></>}
         </span>
         <div className="group-actions">
-          <IconButton label="Edit description" onClick={onDescribe}><TextAlignStart size={15} /></IconButton>
-          <IconButton label={`Rename ${project.name}`} onClick={onRename}><Pencil size={15} /></IconButton>
+          <IconButton label={`Edit ${project.name}`} onClick={onEdit}><Pencil size={15} /></IconButton>
           <IconButton label={`Delete ${project.name}`} className="danger" onClick={onDelete}><Trash2 size={15} /></IconButton>
         </div>
       </header>
@@ -87,7 +85,7 @@ function Group({ project, tasks, filtered, onOpenTask, onAdd, onRename, onDescri
   );
 }
 
-export function Projects({ projects, tasks, filtered, projectId, onOpenTask, onAdd, onNew, onRename, onDescribe, onDelete }: {
+export function Projects({ projects, tasks, filtered, projectId, onOpenTask, onAdd, onNew, onEdit, onDelete }: {
   projects: Project[];
   tasks: Task[]; // already filtered
   filtered: boolean;
@@ -95,8 +93,7 @@ export function Projects({ projects, tasks, filtered, projectId, onOpenTask, onA
   onOpenTask: (id: number) => void;
   onAdd: (p: Project) => void;
   onNew: () => void;
-  onRename: (p: Project) => void;
-  onDescribe: (p: Project) => void;
+  onEdit: (p: Project) => void;
   onDelete: (p: Project) => void;
 }) {
   const shown = projectId ? projects.filter((p) => p.id === projectId) : projects;
@@ -114,7 +111,7 @@ export function Projects({ projects, tasks, filtered, projectId, onOpenTask, onA
         <Group
           key={project.id} project={project} tasks={tasks} filtered={filtered}
           onOpenTask={onOpenTask} onAdd={() => onAdd(project)}
-          onRename={() => onRename(project)} onDescribe={() => onDescribe(project)} onDelete={() => onDelete(project)}
+          onEdit={() => onEdit(project)} onDelete={() => onDelete(project)}
         />
       ))}
     </div>

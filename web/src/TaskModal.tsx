@@ -5,7 +5,7 @@ import {
 } from "./api";
 import { Eye, Pencil, Send, Trash2, X } from "lucide-react";
 import { renderMarkdown } from "./markdown";
-import { Avatar, IconButton, Select } from "./ui";
+import { Avatar, ConfirmDialog, IconButton, Select } from "./ui";
 
 interface Draft {
   title: string;
@@ -45,6 +45,7 @@ export function TaskModal({ taskId, projects, defaultProjectId, defaultStatus, k
   const [editingDesc, setEditingDesc] = useState(taskId === null);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const fromTask = (t: TaskDetail): Draft => ({
     title: t.title, description: t.description, project_id: t.project_id, status: t.status,
@@ -116,9 +117,7 @@ export function TaskModal({ taskId, projects, defaultProjectId, defaultStatus, k
 
   const addComment = () => run(async () => { await api.comment(taskId!, comment); setComment(""); await load(); }, false);
 
-  const remove = () => {
-    if (confirm(`Delete #${taskId} "${task?.title}"? This can't be undone.`)) run(() => api.deleteTask(taskId!));
-  };
+  const remove = () => setConfirmingDelete(true);
 
   return (
     <div className="backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -224,6 +223,15 @@ export function TaskModal({ taskId, projects, defaultProjectId, defaultStatus, k
           </>
         )}
       </div>
+      {confirmingDelete && task && (
+        <ConfirmDialog
+          title={`Delete #${task.id}?`}
+          message={<>“{task.title}” and its comments will be deleted. This can't be undone.</>}
+          confirmLabel="Delete task"
+          onConfirm={() => run(() => api.deleteTask(task.id))}
+          onClose={() => setConfirmingDelete(false)}
+        />
+      )}
     </div>
   );
 }

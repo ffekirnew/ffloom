@@ -417,3 +417,27 @@ footer.bottom {
   .backdrop { padding: 0; }
   .modal { border-radius: 0; min-height: 100%; padding: 16px; }
 }
+
+/* --- dialogs (instead of the browser's prompt and confirm) ------------ */
+
+.dialog-backdrop { z-index: 12; align-items: center; }
+.dialog {
+  width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 14px;
+  background: var(--surface); border-radius: 20px; padding: 18px 20px 20px; box-shadow: var(--lift-shadow);
+}
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dialog-head h2 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.dialog-field { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.dialog-field input, .dialog-field textarea { font-size: 15px; color: var(--text); font-weight: 400; }
+.dialog-field .optional { font-weight: 400; opacity: 0.7; }
+.dialog-message { margin: 0; line-height: 1.5; }
+.dialog-error { margin: 0; color: var(--danger); font-size: 13px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btn.destructive { background: var(--danger); color: #fff; }
+
+@media (max-width: 700px) {
+  /* a bottom sheet on phones, clear of the keyboard's top edge */
+  .dialog-backdrop { align-items: flex-end; padding: 0; }
+  .dialog { max-width: none; border-radius: 20px 20px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+  .dialog-field input, .dialog-field textarea { font-size: 16px; } /* 16px stops iOS zooming in on focus */
+}
