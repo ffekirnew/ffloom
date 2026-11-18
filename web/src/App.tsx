@@ -1,18 +1,27 @@
-import { Activity as ActivityIcon, FolderPlus, LayoutGrid, Monitor, Moon, Pencil, Plus, Spool, Sun, Trash2, X } from "lucide-react";
+import { Activity as ActivityIcon, FolderPlus, LayoutGrid, List, Monitor, Moon, Plus, RefreshCw, Search, Spool, Sun, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Activity } from "./Activity";
 import { Actor, Project, STATUSES, Status, Task, api } from "./api";
 import { Board } from "./Board";
+import { FilterMenu } from "./FilterMenu";
+import { EMPTY_FILTERS, Filters, hasTaskFilters, isOpen, isOverdue, matches } from "./filters";
+import { Projects } from "./Projects";
 import { TaskModal, keyOf } from "./TaskModal";
 import { IconButton, Select } from "./ui";
 
-type View = "board" | "activity";
+type View = "board" | "projects" | "activity";
 type Theme = "system" | "light" | "dark";
 const NEXT_THEME: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
 const THEME_ICON = { system: Monitor, light: Sun, dark: Moon };
 const THEME_LABEL = { system: "System theme", light: "Light theme", dark: "Dark theme" };
 
-// Kanban on desktop, the activity feed on narrow screens; both reachable from the tabs.
+const VIEWS: { id: View; label: string; icon: typeof LayoutGrid }[] = [
+  { id: "board", label: "Board", icon: LayoutGrid },
+  { id: "projects", label: "Projects", icon: List },
+  { id: "activity", label: "Activity", icon: ActivityIcon },
+];
+
+// Kanban on desktop, the activity feed on narrow screens; every view is reachable from the tabs.
 const defaultView = (): View => (window.matchMedia("(max-width: 700px)").matches ? "activity" : "board");
 
 function load<T>(key: string, fallback: T): T {
@@ -30,34 +39,42 @@ function save(key: string, value: unknown) {
   } catch {}
 }
 
+const defaultCollapsed = (ts: Task[]) => new Set(STATUSES.filter((s) => s === "done" || !ts.some((t) => t.status === s)));
+
 export function App() {
   const [view, setView] = useState<View>(defaultView);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState<number | undefined>(() => load("ffloom.project", undefined));
-  const [tasks, setTasks] = useState<Task[]>([]);
-  // a task id, or the status a new task starts in
-  const [open, setOpen] = useState<number | { status: Status } | null>(null);
+  // Every task is loaded once and filtered here: one person's board is small.
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...EMPTY_FILTERS, projectId: load("ffloom.project", undefined) ?? undefined }));
+  // a task id, or what a new task starts with
+  const [open, setOpen] = useState<number | { status: Status; projectId?: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState<Theme>(() => load("ffloom.theme", "system"));
-  // Columns start collapsed when they're Done or empty, worked out once per project from its first load.
+  // Columns start collapsed when they're Done or empty, worked out again whenever the project changes.
   const [collapsed, setCollapsed] = useState<Set<Status> | null>(null);
 
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = () => setRefreshKey((k) => k + 1);
+  const setFilter = <K extends keyof Filters>(k: K, v: Filters[K]) => setFilters((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.projects().then((ps) => {
+    Promise.all([api.projects(), api.tasks()]).then(([ps, ts]) => {
       setProjects(ps);
-      if (projectId && !ps.some((p) => p.id === projectId)) setProjectId(undefined);
-    }).catch(onError);
-    api.tasks(projectId).then((ts) => {
       setTasks(ts);
-      setCollapsed((c) => c ?? new Set(STATUSES.filter((s) => s === "done" || !ts.some((t) => t.status === s))));
+      setSyncedAt(new Date());
+      if (filters.projectId && !ps.some((p) => p.id === filters.projectId)) setFilter("projectId", undefined);
     }).catch(onError);
-  }, [projectId, refreshKey]);
+  }, [refreshKey]);
 
-  useEffect(() => setCollapsed(null), [projectId]);
+  useEffect(() => setCollapsed(null), [filters.projectId]);
+  useEffect(() => {
+    if (tasks && collapsed === null) {
+      setCollapsed(defaultCollapsed(tasks.filter((t) => !filters.projectId || t.project_id === filters.projectId)));
+    }
+  }, [tasks, collapsed]);
 
   useEffect(() => {
     if (theme === "system") delete document.documentElement.dataset.theme;
@@ -65,12 +82,7 @@ export function App() {
     save("ffloom.theme", theme);
   }, [theme]);
 
-  const toggleColumn = (s: Status) => {
-    const next = new Set(collapsed);
-    if (next.has(s)) next.delete(s);
-    else next.add(s);
-    setCollapsed(next);
-  };
+  useEffect(() => save("ffloom.project", filters.projectId ?? null), [filters.projectId]);
 
   // No live updates yet: pick up agents' changes when the tab comes back into focus.
   useEffect(() => {
@@ -79,82 +91,109 @@ export function App() {
     return () => window.removeEventListener("focus", onFocus);
   }, []);
 
-  useEffect(() => save("ffloom.project", projectId ?? null), [projectId]);
+  const all = tasks ?? [];
+  const shown = useMemo(() => all.filter((t) => matches(t, filters, keyOf)), [all, filters]);
+  const inProject = useMemo(() => all.filter((t) => !filters.projectId || t.project_id === filters.projectId), [all, filters.projectId]);
 
   const knownAgents = useMemo(() => {
     const seen = new Map<string, Actor>();
-    for (const t of tasks) if (t.assignee?.kind === "agent") seen.set(keyOf(t.assignee), t.assignee);
+    for (const t of all) if (t.assignee?.kind === "agent") seen.set(keyOf(t.assignee), t.assignee);
     return [...seen.values()];
-  }, [tasks]);
+  }, [all]);
+  const allTags = useMemo(() => [...new Set(all.flatMap((t) => t.tags))].sort((a, b) => a.localeCompare(b)), [all]);
+
+  const toggleColumn = (s: Status) => {
+    const next = new Set(collapsed);
+    if (next.has(s)) next.delete(s);
+    else next.add(s);
+    setCollapsed(next);
+  };
 
   const move = (task: Task, status: Status) => {
-    setTasks(tasks.map((t) => (t.id === task.id ? { ...t, status } : t)));
+    setTasks(all.map((t) => (t.id === task.id ? { ...t, status } : t)));
     api.updateTask(task.id, { status }).then(refresh).catch((e) => { onError(e); refresh(); });
   };
 
   const newProject = () => {
     const name = prompt("New project name");
-    if (name?.trim()) api.createProject(name.trim()).then((p) => { setProjectId(p.id); refresh(); }).catch(onError);
+    if (name?.trim()) api.createProject(name.trim()).then((p) => { setFilter("projectId", p.id); refresh(); }).catch(onError);
   };
-
-  const current = projects.find((p) => p.id === projectId);
-  const renameProject = () => {
-    const name = current && prompt("Rename project", current.name);
-    if (current && name?.trim()) api.updateProject(current.id, { name: name.trim() }).then(refresh).catch(onError);
+  const renameProject = (p: Project) => {
+    const name = prompt("Rename project", p.name);
+    if (name?.trim()) api.updateProject(p.id, { name: name.trim() }).then(refresh).catch(onError);
   };
-  const deleteProject = () => {
-    if (!current) return;
-    const n = Object.values(current.counts).reduce((a, b) => a + (b ?? 0), 0);
-    if (confirm(`Delete project "${current.name}"${n ? ` and its ${n} tasks` : ""}? This can't be undone.`)) {
-      api.deleteProject(current.id).then(() => { setProjectId(undefined); refresh(); }).catch(onError);
+  const describeProject = (p: Project) => {
+    const description = prompt(`Description for ${p.name}`, p.description);
+    if (description !== null) api.updateProject(p.id, { description: description.trim() }).then(refresh).catch(onError);
+  };
+  const deleteProject = (p: Project) => {
+    const n = all.filter((t) => t.project_id === p.id).length;
+    if (confirm(`Delete project "${p.name}"${n ? ` and its ${n} tasks` : ""}? This can't be undone.`)) {
+      api.deleteProject(p.id).then(() => {
+        if (filters.projectId === p.id) setFilter("projectId", undefined);
+        refresh();
+      }).catch(onError);
     }
   };
 
+  const current = projects.find((p) => p.id === filters.projectId);
+  const taskFiltersApply = view !== "activity";
+  const anyFilter = !!filters.search || !!filters.projectId || (taskFiltersApply && hasTaskFilters(filters));
   const ThemeIcon = THEME_ICON[theme];
 
+  const stats = {
+    open: inProject.filter(isOpen).length,
+    blocked: inProject.filter((t) => t.status === "blocked").length,
+    overdue: inProject.filter(isOverdue).length,
+  };
+
   return (
-    <div className="app">
-      <header className="top">
+    <div className={`app view-${view}`}>
+      <header className="top glass">
         <div className="brand"><Spool size={20} strokeWidth={2.25} /><h1>ffloom</h1></div>
-        <div className="segmented" role="tablist">
-          <button role="tab" aria-selected={view === "board"} className={view === "board" ? "active" : ""} onClick={() => setView("board")}>
-            <LayoutGrid size={15} />Board
-          </button>
-          <button role="tab" aria-selected={view === "activity"} className={view === "activity" ? "active" : ""} onClick={() => setView("activity")}>
-            <ActivityIcon size={15} />Activity
-          </button>
-        </div>
+        <nav className="segmented" role="tablist" aria-label="Views">
+          {VIEWS.map(({ id, label, icon: Icon }) => (
+            <button key={id} role="tab" aria-selected={view === id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
+              <Icon size={15} /><span>{label}</span>
+            </button>
+          ))}
+        </nav>
         <div className="spacer" />
-        <div className="project-picker">
-          <Select value={projectId ?? ""} onChange={(e) => setProjectId(e.target.value ? Number(e.target.value) : undefined)}
-            aria-label="Project">
-            <option value="">All projects</option>
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </Select>
-          {current && (
-            <>
-              <IconButton label={`Rename ${current.name}`} onClick={renameProject}><Pencil size={15} /></IconButton>
-              <IconButton label={`Delete ${current.name}`} className="danger" onClick={deleteProject}><Trash2 size={15} /></IconButton>
-            </>
-          )}
-          <IconButton label="New project" onClick={newProject}><FolderPlus size={16} /></IconButton>
-        </div>
         <IconButton label={`${THEME_LABEL[theme]} (click to change)`} onClick={() => setTheme(NEXT_THEME[theme])}>
           <ThemeIcon size={17} />
         </IconButton>
         <button className="btn primary" onClick={() => setOpen({ status: "todo" })} disabled={projects.length === 0}
           title={projects.length === 0 ? "Create a project first" : undefined}>
-          <Plus size={16} strokeWidth={2.5} />New task
+          <Plus size={16} strokeWidth={2.5} /><span>New task</span>
         </button>
       </header>
+
+      {projects.length > 0 && (
+        <div className="filters">
+          <label className="search">
+            <Search size={16} aria-hidden />
+            <input type="search" placeholder="Search" value={filters.search} aria-label="Search"
+              onChange={(e) => setFilter("search", e.target.value)} />
+          </label>
+          <Select value={filters.projectId ?? ""} aria-label="Project" className={filters.projectId ? "set" : ""}
+            onChange={(e) => setFilter("projectId", e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">All projects</option>
+            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </Select>
+          {taskFiltersApply && <FilterMenu filters={filters} agents={knownAgents} tags={allTags} onChange={setFilter} />}
+          {anyFilter && <button className="btn ghost" onClick={() => setFilters(EMPTY_FILTERS)}><X size={14} />Clear</button>}
+        </div>
+      )}
+
       {error && (
         <div className="toast" role="alert">
           <span>{error}</span>
           <IconButton label="Dismiss" onClick={() => setError(null)}><X size={16} /></IconButton>
         </div>
       )}
+
       <main>
-        {projects.length === 0 ? (
+        {tasks === null ? null : projects.length === 0 ? (
           <div className="empty">
             <FolderPlus size={32} strokeWidth={1.5} />
             <p>No projects yet.</p>
@@ -162,20 +201,41 @@ export function App() {
           </div>
         ) : view === "board" ? (
           <Board
-            tasks={tasks} showProject={!projectId} collapsed={collapsed ?? new Set()}
+            tasks={shown} showProject={!filters.projectId} collapsed={collapsed ?? new Set()}
             onToggle={toggleColumn} onOpen={setOpen} onMove={move} onAdd={(status) => setOpen({ status })}
           />
+        ) : view === "projects" ? (
+          <Projects
+            projects={projects} tasks={shown} filtered={!!filters.search || hasTaskFilters(filters)} projectId={filters.projectId}
+            onOpenTask={setOpen} onAdd={(p) => setOpen({ status: "todo", projectId: p.id })}
+            onNew={newProject} onRename={renameProject} onDescribe={describeProject} onDelete={deleteProject}
+          />
         ) : (
-          <Activity projectId={projectId} refreshKey={refreshKey} onOpen={setOpen} onError={onError} />
+          <Activity projectId={filters.projectId} search={filters.search} refreshKey={refreshKey} onOpen={setOpen} onError={onError} />
         )}
       </main>
+
+      <footer className="bottom">
+        <span className="footer-brand"><Spool size={13} strokeWidth={2.25} />ffloom</span>
+        <span className="footer-stats">
+          {current ? `${current.name}: ` : ""}{stats.open} open
+          {stats.blocked > 0 && <> · <span className="bad">{stats.blocked} blocked</span></>}
+          {stats.overdue > 0 && <> · <span className="bad">{stats.overdue} overdue</span></>}
+          {taskFiltersApply && shown.length !== inProject.length && <> · showing {shown.length} of {inProject.length}</>}
+        </span>
+        <span className="footer-sync">
+          {syncedAt && <>Synced {syncedAt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}</>}
+          <IconButton label="Refresh" onClick={refresh}><RefreshCw size={14} /></IconButton>
+        </span>
+      </footer>
+
       {open !== null && (
         <TaskModal
-          key={typeof open === "number" ? open : `new-${open.status}`}
+          key={typeof open === "number" ? open : `new-${open.status}-${open.projectId ?? ""}`}
           taskId={typeof open === "number" ? open : null}
           defaultStatus={typeof open === "number" ? undefined : open.status}
           projects={projects}
-          defaultProjectId={projectId}
+          defaultProjectId={(typeof open === "number" ? undefined : open.projectId) ?? filters.projectId}
           knownAgents={knownAgents}
           onClose={() => setOpen(null)}
           onChanged={refresh}

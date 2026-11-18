@@ -14,8 +14,9 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
-export function Activity({ projectId, refreshKey, onOpen, onError }: {
+export function Activity({ projectId, search, refreshKey, onOpen, onError }: {
   projectId?: number;
+  search: string;
   refreshKey: number;
   onOpen: (id: number) => void;
   onError: (e: unknown) => void;
@@ -35,12 +36,21 @@ export function Activity({ projectId, refreshKey, onOpen, onError }: {
       .then((ev) => { setEvents([...events, ...ev]); setMore(ev.length === PAGE); })
       .catch(onError);
 
+  // Search only narrows what's loaded; "Load more" fetches older pages to search too.
+  const q = search.trim().toLowerCase();
+  const shown = q
+    ? events.filter((e) =>
+        [e.task_title, e.project, who(e.actor), describeEvent(e), e.kind === "commented" ? e.data.body : ""]
+          .some((x) => x?.toLowerCase().includes(q)))
+    : events;
+
   if (loaded && events.length === 0) return <div className="empty"><History size={32} strokeWidth={1.5} /><p>No activity yet.</p></div>;
 
   let lastDay = "";
   return (
     <div className="activity">
-      {events.map((e) => {
+      {loaded && shown.length === 0 && <div className="empty"><p>Nothing matches “{search}”.</p></div>}
+      {shown.map((e) => {
         const day = dayLabel(e.created_at);
         const header = day !== lastDay ? <h3>{day}</h3> : null;
         lastDay = day;
