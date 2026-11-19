@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ffloom</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Home screen: iOS ignores SVG icons, so it gets a 180px PNG. The manifest is
+         fetched with credentials, or Cloudflare Access would redirect it to its login. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="apple-mobile-web-app-title" content="ffloom" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#e2e2e6" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0c0c0e" media="(prefers-color-scheme: dark)" />
   </head>
