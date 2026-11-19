@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Project, STATUS_LABELS, Status, Task, who } from "./api";
 import { DueChip, PriorityBadge } from "./Board";
 import { isOpen } from "./filters";
-import { Avatar, IconButton, StatusDot } from "./ui";
+import { Avatar, IconButton, StatusDot, stagger } from "./ui";
 
 // Work in progress first, finished work last.
 const ORDER: Status[] = ["in_progress", "blocked", "todo", "backlog", "done", "cancelled"];
@@ -16,10 +16,10 @@ const sortTasks = (ts: Task[]) =>
     || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999")
     || a.id - b.id);
 
-function Row({ task, onOpen }: { task: Task; onOpen: () => void }) {
+function Row({ task, index, onOpen }: { task: Task; index: number; onOpen: () => void }) {
   const closed = !isOpen(task);
   return (
-    <li className={`task-row ${closed ? "closed" : ""}`} onClick={onOpen} tabIndex={0}
+    <li className={`task-row ${closed ? "closed" : ""}`} style={stagger(index)} onClick={onOpen} tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(); }}>
       <span className="status-pill"><StatusDot status={task.status} />{STATUS_LABELS[task.status]}</span>
       <span className="row-main">
@@ -70,7 +70,7 @@ function Group({ project, tasks, filtered, onOpenTask, onAdd, onEdit, onDelete }
       </header>
       {!folded && (
         <ul className="rows">
-          {sortTasks(tasks).map((t) => <Row key={t.id} task={t} onOpen={() => onOpenTask(t.id)} />)}
+          {sortTasks(tasks).map((t, i) => <Row key={t.id} task={t} index={i} onOpen={() => onOpenTask(t.id)} />)}
           {tasks.length === 0 && <li className="rows-empty">{filtered ? "No matching tasks" : "No tasks yet"}</li>}
           <li><button type="button" className="add-row" onClick={onAdd}><Plus size={15} strokeWidth={2.5} />Add task</button></li>
         </ul>

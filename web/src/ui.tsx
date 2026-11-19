@@ -1,7 +1,7 @@
 import {
   Bot, ChevronDown, Circle, CircleCheck, CircleDashed, CircleDot, CircleExclamationPoint, CircleX, LucideIcon, User, X,
 } from "lucide-react";
-import { ButtonHTMLAttributes, FormEvent, ReactNode, SelectHTMLAttributes, useEffect, useState } from "react";
+import { ButtonHTMLAttributes, CSSProperties, FormEvent, ReactNode, SelectHTMLAttributes, useEffect, useState } from "react";
 import { Actor, Status } from "./api";
 
 // Status colour is kept to a small dot or icon; nothing else is tinted.
@@ -13,6 +13,9 @@ const STATUS_ICON: Record<Status, LucideIcon> = {
   done: CircleCheck,
   cancelled: CircleX,
 };
+
+// Lists fade in one item after another when they first appear (styles.css caps the delay).
+export const stagger = (i: number) => ({ "--i": i }) as CSSProperties;
 
 export const StatusDot = ({ status }: { status: Status }) => <span className={`dot s-${status}`} aria-hidden />;
 

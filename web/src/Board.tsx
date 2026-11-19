@@ -3,10 +3,10 @@ import {
   useDraggable, useDroppable, useSensor, useSensors,
 } from "@dnd-kit/core";
 import { Calendar, ChevronsLeftRight, ChevronsRightLeft, Flag, Plus } from "lucide-react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { STATUSES, STATUS_LABELS, Status, Task, today, who } from "./api";
 import { inDays, isOverdue } from "./filters";
-import { Avatar, IconButton, StatusDot, StatusIcon } from "./ui";
+import { Avatar, IconButton, StatusDot, StatusIcon, stagger } from "./ui";
 
 // Done only shows what was finished recently; everything stays in the Projects list.
 const DONE_DAYS = 14;
@@ -70,12 +70,15 @@ const closedClass = (t: Task) => (t.status === "done" || t.status === "cancelled
 
 // The card stays in its column as a faded placeholder while a copy follows the
 // pointer in <DragOverlay>: the column's card list scrolls, which would clip it.
-function Card({ task, showProject, onOpen }: { task: Task; showProject: boolean; onOpen: () => void }) {
+function Card({ task, index, showProject, onOpen }: {
+  task: Task; index?: number; showProject: boolean; onOpen: () => void;
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
   return (
     <div
       ref={setNodeRef}
       className={`card ${isDragging ? "placeholder-card" : ""} ${closedClass(task)}`}
+      style={index === undefined ? undefined : stagger(index)}
       onClick={onOpen}
       {...listeners}
       {...attributes}
@@ -93,8 +96,8 @@ function dayLabel(iso: string): string {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-function Column({ status, tasks, showProject, collapsed, onToggle, onOpen, onAdd }: {
-  status: Status; tasks: Task[]; showProject: boolean; collapsed: boolean;
+function Column({ status, tasks, showProject, collapsed, entering, onToggle, onOpen, onAdd }: {
+  status: Status; tasks: Task[]; showProject: boolean; collapsed: boolean; entering: boolean;
   onToggle: () => void; onOpen: (id: number) => void; onAdd: () => void;
 }) {
   // A collapsed column still takes drops, so a card can be sent to Done without opening it.
@@ -123,7 +126,7 @@ function Column({ status, tasks, showProject, collapsed, onToggle, onOpen, onAdd
         <IconButton label={`Collapse ${label}`} onClick={onToggle}><ChevronsRightLeft size={15} /></IconButton>
       </header>
       <div className="cards">
-        {tasks.map((t) => {
+        {tasks.map((t, i) => {
           let divider = null;
           if (status === "done") {
             const day = dayLabel(t.updated_at);
@@ -136,7 +139,7 @@ function Column({ status, tasks, showProject, collapsed, onToggle, onOpen, onAdd
           return (
             <Fragment key={t.id}>
               {divider}
-              <Card task={t} showProject={showProject} onOpen={() => onOpen(t.id)} />
+              <Card task={t} index={entering ? i : undefined} showProject={showProject} onOpen={() => onOpen(t.id)} />
             </Fragment>
           );
         })}
@@ -163,6 +166,13 @@ export function Board({ tasks, showProject, collapsed, onToggle, onOpen, onMove,
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
   );
   const [activeId, setActiveId] = useState<number | null>(null);
+  // Cards cascade in when the board opens; after that, a card that appears (moved or
+  // filtered in) settles in on its own, without waiting for the ones above it.
+  const [entering, setEntering] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setEntering(false), 700);
+    return () => clearTimeout(t);
+  }, []);
   const active = tasks.find((t) => t.id === activeId);
   const onDragStart = (e: DragStartEvent) => setActiveId(Number(e.active.id));
   const onDragEnd = (e: DragEndEvent) => {
@@ -183,7 +193,7 @@ export function Board({ tasks, showProject, collapsed, onToggle, onOpen, onMove,
         {STATUSES.map((s) => (
           <Column
             key={s} status={s} tasks={inColumn(s)} showProject={showProject}
-            collapsed={collapsed.has(s)} onToggle={() => onToggle(s)} onOpen={onOpen} onAdd={() => onAdd(s)}
+            collapsed={collapsed.has(s)} entering={entering} onToggle={() => onToggle(s)} onOpen={onOpen} onAdd={() => onAdd(s)}
           />
         ))}
       </div>

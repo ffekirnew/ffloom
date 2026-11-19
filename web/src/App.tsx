@@ -1,5 +1,6 @@
 import { Contrast, FolderPlus, Keyboard, Moon, Plus, Search, Spool, Sun, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Activity } from "./Activity";
 import { Actor, Project, STATUSES, Status, Task, api, relTime } from "./api";
 import { Board } from "./Board";
@@ -52,6 +53,11 @@ function save(key: string, value: unknown) {
 
 const defaultCollapsed = (ts: Task[]) => new Set(STATUSES.filter((s) => s === "done" || !ts.some((t) => t.status === s)));
 
+const applyTheme = (theme: Theme) => {
+  if (theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+};
+
 const typing = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
 
@@ -73,6 +79,8 @@ export function App() {
   const [deleting, setDeleting] = useState<Project | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const tabsRef = useRef<HTMLElement>(null);
+  const [pill, setPill] = useState<{ x: number; w: number } | null>(null);
 
   const onError = (e: unknown) => setError(e instanceof Error ? e.message : String(e));
   const refresh = () => setRefreshKey((k) => k + 1);
@@ -94,10 +102,32 @@ export function App() {
   }, [tasks, collapsed]);
 
   useEffect(() => {
-    if (theme === "system") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme;
+    applyTheme(theme);
     save("ffloom.theme", theme);
   }, [theme]);
+
+  // The tab pill slides to the active tab; it's measured again when the header reflows.
+  useLayoutEffect(() => {
+    const nav = tabsRef.current;
+    if (!nav) return;
+    const place = () => {
+      const b = nav.querySelector<HTMLElement>("button.active");
+      if (b) setPill({ x: b.offsetLeft, w: b.offsetWidth });
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [view]);
+
+  // Crossfade the whole page between themes where the browser supports view transitions.
+  const changeTheme = (t: Theme) => {
+    if (!document.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return setTheme(t);
+    document.startViewTransition(() => {
+      applyTheme(t);
+      flushSync(() => setTheme(t));
+    });
+  };
 
   useEffect(() => save("ffloom.project", filters.projectId ?? null), [filters.projectId]);
 
@@ -167,7 +197,8 @@ export function App() {
             <span className="logo"><Spool size={15} strokeWidth={2.5} /></span>
             <h1>ffloom</h1>
           </div>
-          <nav className="tabs" role="tablist" aria-label="Views">
+          <nav className="tabs" role="tablist" aria-label="Views" ref={tabsRef}>
+            {pill && <span className="tab-pill" style={{ width: pill.w, transform: `translateX(${pill.x}px)` }} aria-hidden />}
             {VIEWS.map(({ id, label }) => (
               <button key={id} role="tab" aria-selected={view === id} className={view === id ? "active" : ""} onClick={() => setView(id)}>
                 {label}
@@ -182,7 +213,7 @@ export function App() {
           <div className="theme-switch" role="radiogroup" aria-label="Theme">
             {THEMES.map(({ id, label, icon: Icon }) => (
               <button key={id} role="radio" aria-checked={theme === id} title={label} aria-label={label}
-                className={theme === id ? "active" : ""} onClick={() => setTheme(id)}>
+                className={theme === id ? "active" : ""} onClick={() => changeTheme(id)}>
                 <Icon size={14} strokeWidth={2.25} />
               </button>
             ))}
@@ -215,7 +246,7 @@ export function App() {
           </div>
         )}
 
-        <main>
+        <main key={view}>
           {tasks === null ? null : projects.length === 0 ? (
             <div className="empty">
               <FolderPlus size={32} strokeWidth={1.5} />

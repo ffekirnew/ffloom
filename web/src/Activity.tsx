@@ -1,7 +1,7 @@
 import { History } from "lucide-react";
 import { useEffect, useState } from "react";
 import { TaskEvent, api, describeEvent, relTime, who } from "./api";
-import { Avatar } from "./ui";
+import { Avatar, stagger } from "./ui";
 
 const PAGE = 50;
 
@@ -50,7 +50,7 @@ export function Activity({ projectId, search, refreshKey, onOpen, onError }: {
   return (
     <div className="activity">
       {loaded && shown.length === 0 && <div className="empty"><p>Nothing matches “{search}”.</p></div>}
-      {shown.map((e) => {
+      {shown.map((e, i) => {
         const day = dayLabel(e.created_at);
         const header = day !== lastDay ? <h3>{day}</h3> : null;
         lastDay = day;
@@ -58,7 +58,7 @@ export function Activity({ projectId, search, refreshKey, onOpen, onError }: {
         return (
           <div key={e.id}>
             {header}
-            <div className="event">
+            <div className="event" style={stagger(i)}>
               <Avatar actor={e.actor} size={30} />
               <div className="line">
                 <span className={`actor ${e.actor.kind}`}>{who(e.actor)}</span>{" "}
