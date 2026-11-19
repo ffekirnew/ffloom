@@ -1,12 +1,19 @@
 import {
-  DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, TouchSensor,
-  useDraggable, useDroppable, useSensor, useSensors,
+  CollisionDetection, DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, TouchSensor,
+  pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors,
 } from "@dnd-kit/core";
 import { Calendar, ChevronsLeftRight, ChevronsRightLeft, Flag, Plus } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import { STATUSES, STATUS_LABELS, Status, Task, today, who } from "./api";
 import { inDays, isOverdue } from "./filters";
 import { Avatar, IconButton, StatusDot, StatusIcon, stagger } from "./ui";
+
+// Drop on the column under the pointer, so a narrow collapsed column isn't outvoted by a
+// wide neighbour the card overlaps more; fall back to overlap when the pointer is between columns.
+const collision: CollisionDetection = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length ? hits : rectIntersection(args);
+};
 
 // Done only shows what was finished recently; everything stays in the Projects list.
 const DONE_DAYS = 14;
@@ -105,7 +112,7 @@ function Column({ status, tasks, showProject, collapsed, entering, onToggle, onO
   const label = STATUS_LABELS[status];
   if (collapsed) {
     return (
-      <section ref={setNodeRef} className={`column collapsed ${isOver ? "over" : ""}`}>
+      <section ref={setNodeRef} className={`column collapsed s-${status} ${isOver ? "over" : ""}`}>
         <IconButton label={`Expand ${label}`} onClick={onToggle}><ChevronsLeftRight size={15} /></IconButton>
         <StatusDot status={status} />
         <span className="collapsed-label">{label}</span>
@@ -116,7 +123,7 @@ function Column({ status, tasks, showProject, collapsed, entering, onToggle, onO
   // Done is grouped by the day each task was finished (its last update).
   let lastDay = "";
   return (
-    <section ref={setNodeRef} className={`column ${isOver ? "over" : ""}`}>
+    <section ref={setNodeRef} className={`column s-${status} ${isOver ? "over" : ""}`}>
       <header className="column-head">
         <StatusDot status={status} />
         <h2>{label}</h2>
@@ -188,8 +195,8 @@ export function Board({ tasks, showProject, collapsed, onToggle, onOpen, onMove,
     return ts.filter((t) => t.updated_at.slice(0, 10) >= cutoff).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   };
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
-      <div className="board">
+    <DndContext sensors={sensors} collisionDetection={collision} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
+      <div className={`board ${active ? "dragging" : ""}`}>
         {STATUSES.map((s) => (
           <Column
             key={s} status={s} tasks={inColumn(s)} showProject={showProject}

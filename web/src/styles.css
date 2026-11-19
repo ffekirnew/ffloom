@@ -255,11 +255,17 @@ footer.bottom {
 .column {
   flex: 1 1 0; min-width: 260px; max-height: 100%; display: flex; flex-direction: column;
   background: var(--column); border: 1px solid var(--border); border-radius: 14px;
-  transition: border-color 0.15s, background 0.15s, flex 0.3s var(--ease), min-width 0.3s var(--ease);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, flex 0.3s var(--ease), min-width 0.3s var(--ease);
 }
 /* What's inside a column changes completely when it collapses, so it fades in while the width slides. */
 .column > * { animation: fade-in 0.25s var(--ease) backwards; }
-.column.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--column)); }
+/* A column lights up in its own status colour while a card is over it. */
+.column.over {
+  border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, var(--column));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent);
+}
+/* While dragging, collapsed columns run the full height so they're easy to drop on. */
+.board.dragging .column.collapsed { align-self: stretch; }
 .column-head { display: flex; align-items: center; gap: 8px; padding: 10px 8px 8px 14px; }
 .column-head h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .column-note { font-size: 12.5px; color: var(--muted); }
