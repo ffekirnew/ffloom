@@ -1,12 +1,11 @@
 """FastAPI app: the JSON API under /api, and the built UI at /.
 
-Who made a change comes from the X-Ffloom-Agent / X-Ffloom-Model headers that the
-CLI sends. A request without them (the UI) is the user. Nothing is verified:
+Who made a change comes from the X-Rail-Agent / X-Rail-Model headers that the
+CLI sends (CLIs from before the rename send X-Ffloom-*, which still work). A request without them (the UI) is the user. Nothing is verified:
 the CLI runs only on the server and Cloudflare Access gates the UI.
 """
 
 import json
-import os
 import sqlite3
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
@@ -17,10 +16,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
-from . import PRIORITIES, STATUSES, db
+from . import PRIORITIES, STATUSES, db, env
 
-DB_PATH = os.environ.get("FFLOOM_DB", "ffloom.db")
-WEB_DIR = Path(os.environ.get("FFLOOM_WEB_DIR", Path(__file__).parent / "web"))
+DB_PATH = env("DB", "rail.db")
+WEB_DIR = Path(env("WEB_DIR") or Path(__file__).parent / "web")
 
 Status = Literal["backlog", "todo", "in_progress", "blocked", "done", "cancelled"]
 Priority = Literal["low", "medium", "high", "urgent"]
@@ -113,11 +112,14 @@ def get_conn():
 
 
 def get_actor(
+    x_rail_agent: Annotated[str | None, Header()] = None,
+    x_rail_model: Annotated[str | None, Header()] = None,
     x_ffloom_agent: Annotated[str | None, Header()] = None,
     x_ffloom_model: Annotated[str | None, Header()] = None,
 ) -> Actor:
-    if x_ffloom_agent:
-        return Actor(kind="agent", agent=x_ffloom_agent, model=x_ffloom_model or None)
+    agent, model = (x_rail_agent, x_rail_model) if x_rail_agent else (x_ffloom_agent, x_ffloom_model)
+    if agent:
+        return Actor(kind="agent", agent=agent, model=model or None)
     return Actor(kind="user")
 
 
@@ -233,7 +235,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="ffloom", lifespan=lifespan)
+app = FastAPI(title="rail", lifespan=lifespan)
 
 
 @app.get("/api/health")

@@ -1,13 +1,13 @@
 ---
-name: ffloom-plan
-description: Turn a one-line goal ("learn driving in 2027", "run a half marathon", "ship opengym v1") into a SMART project on the user's ffloom board. Interviews the user one question at a time to pin down scope and requirements, checks the goal against SMART, then creates the project, milestones and first tasks with the `ffloom` CLI once the user approves. Use when the user asks to plan a project or goal, or gives a bare one-line goal and wants help making it real.
+name: rail-plan
+description: Turn a one-line goal ("learn driving in 2027", "run a half marathon", "ship opengym v1") into a SMART project on the user's rail board. Interviews the user one question at a time to pin down scope and requirements, checks the goal against SMART, then creates the project, milestones and first tasks with the `rail` CLI once the user approves. Use when the user asks to plan a project or goal, or gives a bare one-line goal and wants help making it real.
 ---
 
 # Plan a project from one line
 
-The user gives you a goal in a sentence. By the end, there is a project on their ffloom board with a goal that is Specific, Measurable, Achievable, Relevant and Time-bound, a short list of dated milestones, and the next few tasks, so they know what to do this week.
+The user gives you a goal in a sentence. By the end, there is a project on their rail board with a goal that is Specific, Measurable, Achievable, Relevant and Time-bound, a short list of dated milestones, and the next few tasks, so they know what to do this week.
 
-Read the `ffloom` skill before writing to the board: it covers the CLI, the `FFLOOM_AGENT`/`FFLOOM_MODEL` variables and the rule that you never delete anything.
+Read the `rail` skill before writing to the board: it covers the CLI, the `RAIL_AGENT`/`RAIL_MODEL` variables and the rule that you never delete anything.
 
 Run the steps in order. Don't skip ahead to a plan before the interview has given you what it needs.
 
@@ -15,7 +15,7 @@ Run the steps in order. Don't skip ahead to a plan before the interview has give
 
 - Say back what you understood in one sentence, and say you'll ask a few questions, one at a time.
 - Run `date +%F` so every date you propose is real. Don't guess today's date.
-- Run `ffloom projects --json` and `ffloom list -q <key words> --all --json`. If a project or tasks for this goal already exist, say so and ask whether to plan inside it or start fresh.
+- Run `rail projects --json` and `rail list -q <key words> --all --json`. If a project or tasks for this goal already exist, say so and ask whether to plan inside it or start fresh.
 
 ## 2. Interview, one question at a time
 
@@ -71,35 +71,35 @@ Show the whole plan before touching the board:
 - **Risks**: each with what they'll do if it happens.
 - **Reviews**: a check-in at every milestone date.
 
-Then show the exact `ffloom` commands you'll run, and ask for approval. Change the plan as many times as they want. Write nothing to the board until they say yes.
+Then show the exact `rail` commands you'll run, and ask for approval. Change the plan as many times as they want. Write nothing to the board until they say yes.
 
-## 5. Write it to ffloom
+## 5. Write it to rail
 
-Only after approval. Set your identity on every command, as the `ffloom` skill says. Map the plan like this:
+Only after approval. Set your identity on every command, as the `rail` skill says. Map the plan like this:
 
-| Plan part | In ffloom |
+| Plan part | In rail |
 | --- | --- |
-| Project | `ffloom project add <name> -d "<SMART goal sentence>"` |
+| Project | `rail project add <name> -d "<SMART goal sentence>"` |
 | Full plan | One task, `Review plan: <goal>`, tag `plan`, status `todo`, due at the first milestone, assigned `--user`, description = the whole plan in markdown (goal, SMART table, scope, milestones, risks), passed with `-d -` on stdin |
 | Milestone | One task per milestone, title = the result ("Theory test passed"), tag `milestone`, status `backlog` (the first one `todo`), `--due` = its date, assigned `--user`, description = what done means and the steps you expect |
 | First tasks | Status `todo`, assigned `--user`, a due date only where there is a real one (a booking, a deadline), priority `medium` unless the user said otherwise |
 
-ffloom has no child tasks or dependencies yet, so milestones carry the order through their due dates and descriptions. Don't encode it any other way.
+rail has no child tasks or dependencies yet, so milestones carry the order through their due dates and descriptions. Don't encode it any other way.
 
 For example:
 
 ```bash
-export FFLOOM_AGENT="Claude Code" FFLOOM_MODEL="Opus 5.5"
-ffloom project add driving-licence -d "Pass the practical driving test (manual) by 30 June 2027."
-ffloom add "Review plan: pass the driving test by 30 June 2027" -p driving-licence -t plan --user --due 2027-01-31 -d - <<'EOF'
+export RAIL_AGENT="Claude Code" RAIL_MODEL="Opus 5.5"
+rail project add driving-licence -d "Pass the practical driving test (manual) by 30 June 2027."
+rail add "Review plan: pass the driving test by 30 June 2027" -p driving-licence -t plan --user --due 2027-01-31 -d - <<'EOF'
 ## Goal
 ...
 EOF
-ffloom add "Provisional licence received" -p driving-licence -t milestone --user --due 2026-12-15 -d "Done when the licence has arrived. Steps: apply online, send ID."
-ffloom add "Apply for a provisional licence" -p driving-licence --user
+rail add "Provisional licence received" -p driving-licence -t milestone --user --due 2026-12-15 -d "Done when the licence has arrived. Steps: apply online, send ID."
+rail add "Apply for a provisional licence" -p driving-licence --user
 ```
 
-Then run `ffloom list -p <project> --json` and check that every task is there with the right status, tags and dates. Finish with a short summary: the goal, the milestones with dates, and the one task to do first.
+Then run `rail list -p <project> --json` and check that every task is there with the right status, tags and dates. Finish with a short summary: the goal, the milestones with dates, and the one task to do first.
 
 ## When a milestone comes due later
 

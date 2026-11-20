@@ -69,9 +69,22 @@ def connect(path: str) -> sqlite3.Connection:
     return conn
 
 
+def adopt_legacy(path: str) -> None:
+    """Rename ffloom.db (from before the rename to rail) to `path` if `path` doesn't exist yet."""
+    new = Path(path)
+    old = new.with_name("ffloom.db")
+    if path == ":memory:" or new.exists() or new == old or not old.exists():
+        return
+    for suffix in ("", "-wal", "-shm"):  # WAL files must move with the database
+        src = Path(f"{old}{suffix}")
+        if src.exists():
+            src.rename(f"{new}{suffix}")
+
+
 def migrate(path: str) -> None:
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+    adopt_legacy(path)
     conn = connect(path)
     try:
         conn.execute("PRAGMA journal_mode = WAL")

@@ -4,12 +4,12 @@ import threading
 import pytest
 import uvicorn
 
-from ffloom import cli, server
+from rail import cli, server
 
 
 @pytest.fixture
 def url(tmp_path, monkeypatch):
-    monkeypatch.setattr(server, "DB_PATH", str(tmp_path / "ffloom.db"))
+    monkeypatch.setattr(server, "DB_PATH", str(tmp_path / "rail.db"))
     config = uvicorn.Config(server.app, host="127.0.0.1", port=0, log_level="error")
     srv = uvicorn.Server(config)
     thread = threading.Thread(target=srv.run, daemon=True)
@@ -24,9 +24,9 @@ def url(tmp_path, monkeypatch):
 
 @pytest.fixture
 def run(url, monkeypatch, capsys):
-    monkeypatch.setenv("FFLOOM_URL", url)
-    monkeypatch.setenv("FFLOOM_AGENT", "Claude Code")
-    monkeypatch.setenv("FFLOOM_MODEL", "Opus 5.5")
+    monkeypatch.setenv("RAIL_URL", url)
+    monkeypatch.setenv("RAIL_AGENT", "Claude Code")
+    monkeypatch.setenv("RAIL_MODEL", "Opus 5.5")
 
     def run(*argv):
         code = cli.main(list(argv))
@@ -62,9 +62,9 @@ def test_agent_workflow(run):
 
 
 def test_changes_need_an_agent_name(run, monkeypatch):
-    monkeypatch.delenv("FFLOOM_AGENT")
+    monkeypatch.delenv("RAIL_AGENT")
     code, _, err = run("project", "add", "x")
-    assert code == 1 and "FFLOOM_AGENT" in err
+    assert code == 1 and "RAIL_AGENT" in err
 
 
 def test_unknown_project_lists_the_real_ones(run):

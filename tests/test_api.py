@@ -1,14 +1,14 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from ffloom import server
+from rail import server
 
-AGENT = {"X-Ffloom-Agent": "Claude Code", "X-Ffloom-Model": "Opus 5.5"}
+AGENT = {"X-Rail-Agent": "Claude Code", "X-Rail-Model": "Opus 5.5"}
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(server, "DB_PATH", str(tmp_path / "ffloom.db"))
+    monkeypatch.setattr(server, "DB_PATH", str(tmp_path / "rail.db"))
     with TestClient(server.app) as c:
         yield c
 

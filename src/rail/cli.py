@@ -1,22 +1,22 @@
-"""`ffloom`: the command-line client agents use. Standard library only.
+"""`rail`: the command-line client agents use. Standard library only.
 
 Configuration (flags override):
-  FFLOOM_URL    API base URL (default http://127.0.0.1:8020)
-  FFLOOM_AGENT  who is making changes, e.g. "Claude Code" (required for changes)
-  FFLOOM_MODEL  the model, e.g. "Opus 5.5"
+  RAIL_URL    API base URL (default http://127.0.0.1:8020)
+  RAIL_AGENT  who is making changes, e.g. "Claude Code" (required for changes)
+  RAIL_MODEL  the model, e.g. "Opus 5.5"
+The old FFLOOM_* names still work when the RAIL_* one is unset.
 
 There is deliberately no delete command: deleting is done in the UI only.
 """
 
 import argparse
 import json
-import os
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import PRIORITIES, STATUSES
+from . import PRIORITIES, STATUSES, env
 
 
 class CLIError(Exception):
@@ -31,7 +31,7 @@ class Client:
 
     def request(self, method: str, path: str, body=None, params=None, write=False):
         if write and not self.agent:
-            raise CLIError("set FFLOOM_AGENT (or pass --agent) so the change is recorded under your name")
+            raise CLIError("set RAIL_AGENT (or pass --agent) so the change is recorded under your name")
         url = self.url + path
         if params:
             url += "?" + urllib.parse.urlencode(
@@ -43,9 +43,9 @@ class Client:
             data = json.dumps(body).encode()
             headers["Content-Type"] = "application/json"
         if self.agent:
-            headers["X-Ffloom-Agent"] = self.agent
+            headers["X-Rail-Agent"] = self.agent
         if self.model:
-            headers["X-Ffloom-Model"] = self.model
+            headers["X-Rail-Model"] = self.model
         req = urllib.request.Request(url, data=data, method=method, headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=15) as resp:
@@ -67,7 +67,7 @@ class Client:
             if str(p["id"]) == ref or p["name"].lower() == ref.lower():
                 return p["id"]
         names = ", ".join(p["name"] for p in projects) or "none yet"
-        raise CLIError(f"no project {ref!r} (projects: {names}). Create it with `ffloom project add`.")
+        raise CLIError(f"no project {ref!r} (projects: {names}). Create it with `rail project add`.")
 
 
 # --- output -----------------------------------------------------------------
@@ -177,7 +177,7 @@ def cmd_project_add(c: Client, args) -> None:
 def assignee_from(args, c: Client) -> dict | None:
     if getattr(args, "me", False):
         if not c.agent:
-            raise CLIError("--me needs FFLOOM_AGENT")
+            raise CLIError("--me needs RAIL_AGENT")
         return {"kind": "agent", "agent": c.agent, "model": c.model}
     if getattr(args, "user", False):
         return {"kind": "user"}
@@ -211,7 +211,7 @@ def cmd_list(c: Client, args) -> None:
     }
     if args.assignee == "me":
         if not c.agent:
-            raise CLIError("--assignee me needs FFLOOM_AGENT")
+            raise CLIError("--assignee me needs RAIL_AGENT")
         params.update(assignee_kind="agent", assignee_agent=c.agent)
     elif args.assignee == "user":
         params["assignee_kind"] = "user"
@@ -251,7 +251,7 @@ def cmd_update(c: Client, args) -> None:
     if args.remove_tag:
         body["remove_tags"] = args.remove_tag
     if not body:
-        raise CLIError("nothing to update; see `ffloom update --help`")
+        raise CLIError("nothing to update; see `rail update --help`")
     t = c.request("PATCH", f"/api/tasks/{args.id}", body, write=True)
     output(args, t, lambda t: print(f"updated #{t['id']} {t['title']}"))
 
@@ -296,7 +296,7 @@ def cmd_activity(c: Client, args) -> None:
 
 def add_assignee_flags(p, *, with_none=False) -> None:
     g = p.add_mutually_exclusive_group()
-    g.add_argument("--me", action="store_true", help="assign to yourself (FFLOOM_AGENT/FFLOOM_MODEL)")
+    g.add_argument("--me", action="store_true", help="assign to yourself (RAIL_AGENT/RAIL_MODEL)")
     g.add_argument("--user", action="store_true", help="assign to the human")
     g.add_argument("--agent", dest="assign_agent", metavar="NAME", help="assign to another agent")
     if with_none:
@@ -307,13 +307,13 @@ def add_assignee_flags(p, *, with_none=False) -> None:
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", help="print JSON")
-    common.add_argument("--url", default=os.environ.get("FFLOOM_URL", "http://127.0.0.1:8020"))
-    common.add_argument("--as", dest="agent", default=os.environ.get("FFLOOM_AGENT"), metavar="AGENT",
-                        help="who is making the change (default FFLOOM_AGENT)")
-    common.add_argument("--as-model", dest="model", default=os.environ.get("FFLOOM_MODEL"), metavar="MODEL",
-                        help="your model (default FFLOOM_MODEL)")
+    common.add_argument("--url", default=env("URL", "http://127.0.0.1:8020"))
+    common.add_argument("--as", dest="agent", default=env("AGENT"), metavar="AGENT",
+                        help="who is making the change (default RAIL_AGENT)")
+    common.add_argument("--as-model", dest="model", default=env("MODEL"), metavar="MODEL",
+                        help="your model (default RAIL_MODEL)")
 
-    parser = argparse.ArgumentParser(prog="ffloom", description=__doc__,
+    parser = argparse.ArgumentParser(prog="rail", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -389,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args.fn(client, args)
     except CLIError as e:
-        print(f"ffloom: {e}", file=sys.stderr)
+        print(f"rail: {e}", file=sys.stderr)
         return 1
     return 0
 

@@ -1,4 +1,4 @@
-import { Contrast, FolderPlus, Keyboard, Moon, Plus, Search, Spool, Sun, X } from "lucide-react";
+import { Contrast, FolderPlus, Keyboard, Moon, Plus, Search, Sun, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Activity } from "./Activity";
@@ -36,6 +36,7 @@ const SHORTCUTS: [string, string][] = [
 // Kanban on desktop, the activity feed on narrow screens; every view is reachable from the tabs.
 const defaultView = (): View => (window.matchMedia("(max-width: 700px)").matches ? "activity" : "board");
 
+// Settings saved before the rename live under ffloom.* keys; callers pass those as the fallback.
 function load<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key);
@@ -43,6 +44,19 @@ function load<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+// The app icon's mark (web/public/favicon.svg) without its tile: a track running to a goal.
+function TrackMark() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden>
+      <g fill="none" stroke="currentColor" strokeLinecap="round">
+        <path d="M11 25.5 13.7 10.5M21 25.5 18.3 10.5" strokeWidth="2.25" />
+        <path d="M9 21.5h14M10.6 15.5h10.8" strokeWidth="1.8" strokeOpacity=".7" />
+      </g>
+      <circle cx="16" cy="6.8" r="2" fill="currentColor" />
+    </svg>
+  );
 }
 
 function save(key: string, value: unknown) {
@@ -66,12 +80,12 @@ export function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   // Every task is loaded once and filtered here: one person's board is small.
   const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [filters, setFilters] = useState<Filters>(() => ({ ...EMPTY_FILTERS, projectId: load("ffloom.project", undefined) ?? undefined }));
+  const [filters, setFilters] = useState<Filters>(() => ({ ...EMPTY_FILTERS, projectId: load("rail.project", load("ffloom.project", undefined)) ?? undefined }));
   // a task id, or what a new task starts with
   const [open, setOpen] = useState<number | { status: Status; projectId?: number } | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [theme, setTheme] = useState<Theme>(() => load("ffloom.theme", "system"));
+  const [theme, setTheme] = useState<Theme>(() => load("rail.theme", load("ffloom.theme", "system")));
   // Columns start collapsed when they're Done or empty, worked out again whenever the project changes.
   const [collapsed, setCollapsed] = useState<Set<Status> | null>(null);
   // { project } edits one, {} creates one
@@ -103,7 +117,7 @@ export function App() {
 
   useEffect(() => {
     applyTheme(theme);
-    save("ffloom.theme", theme);
+    save("rail.theme", theme);
   }, [theme]);
 
   // The tab pill slides to the active tab; it's measured again when the header reflows.
@@ -129,7 +143,7 @@ export function App() {
     });
   };
 
-  useEffect(() => save("ffloom.project", filters.projectId ?? null), [filters.projectId]);
+  useEffect(() => save("rail.project", filters.projectId ?? null), [filters.projectId]);
 
   // No live updates yet: pick up agents' changes when the tab comes back into focus.
   useEffect(() => {
@@ -194,8 +208,8 @@ export function App() {
       <div className="frame">
         <header className="top">
           <div className="brand">
-            <span className="logo"><Spool size={15} strokeWidth={2.5} /></span>
-            <h1>ffloom</h1>
+            <span className="logo"><TrackMark /></span>
+            <h1>rail</h1>
           </div>
           <nav className="tabs" role="tablist" aria-label="Views" ref={tabsRef}>
             {pill && <span className="tab-pill" style={{ width: pill.w, transform: `translateX(${pill.x}px)` }} aria-hidden />}
