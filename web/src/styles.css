@@ -1,4 +1,4 @@
-/* Quiet and flat: the app sits in a rounded panel, greys do the work, purple is the one
+/* Quiet and flat: the app sits in a rounded panel, greys do the work, crimson is the one
    accent, and status colour is only ever a small dot or icon. */
 :root {
   --page: #e2e2e6;
@@ -11,8 +11,8 @@
   --text: #26262b;
   --muted: #85858e;
   --faint: #a8a8b0;
-  --accent: #7c4ddb;
-  --accent-soft: rgb(124 77 219 / 0.11);
+  --accent: #b3123f;
+  --accent-soft: rgb(179 18 63 / 0.1);
   --on-accent: #ffffff;
   --danger: #dc3e42;
   --danger-soft: rgb(220 62 66 / 0.1);
@@ -46,9 +46,9 @@
     --text: #ececf0;
     --muted: #8c8c96;
     --faint: #66666e;
-    --accent: #a78bfa;
-    --accent-soft: rgb(167 139 250 / 0.16);
-    --on-accent: #17122a;
+    --accent: #f2577f;
+    --accent-soft: rgb(242 87 127 / 0.15);
+    --on-accent: #2b0510;
     --danger: #f2555a;
     --danger-soft: rgb(242 85 90 / 0.14);
     --warn: #f0a33a;
@@ -77,9 +77,9 @@
   --text: #ececf0;
   --muted: #8c8c96;
   --faint: #66666e;
-  --accent: #a78bfa;
-  --accent-soft: rgb(167 139 250 / 0.16);
-  --on-accent: #17122a;
+  --accent: #f2577f;
+  --accent-soft: rgb(242 87 127 / 0.15);
+  --on-accent: #2b0510;
   --danger: #f2555a;
   --danger-soft: rgb(242 85 90 / 0.14);
   --warn: #f0a33a;
