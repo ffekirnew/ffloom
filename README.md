@@ -49,6 +49,8 @@ rail was called ffloom. Existing setups keep working:
 
 Reinstall the CLI (`uv tool uninstall ffloom && uv tool install ...`) and re-point the skill symlinks to `skill/rail` and `skill/rail-plan`.
 
+The repository moved from `ffekirnew/ffloom` to `ffekirnew/rail`; GitHub redirects the old URL. The image moved with it: pull `ghcr.io/ffekirnew/rail`, because `ghcr.io/ffekirnew/ffloom` no longer gets updates.
+
 ## Develop
 
 ```bash
